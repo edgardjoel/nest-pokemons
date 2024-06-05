@@ -1,7 +1,8 @@
-import { HttpService } from '@nestjs/axios';
 import { Injectable } from '@nestjs/common';
-import axios, { AxiosInstance, AxiosResponse } from 'axios';
-import { Observable, map } from 'rxjs';
+import { InjectModel } from '@nestjs/mongoose';
+import { AxiosInstance } from 'axios';
+import { Model } from 'mongoose';
+import { AxiosAdapter } from 'src/common/adapters/axios.adapter';
 import { Pokemon } from 'src/pokemon/entities/pokemon.entity';
 import { PokeResponse } from './interfaces/poke-response.interface';
 
@@ -9,20 +10,55 @@ import { PokeResponse } from './interfaces/poke-response.interface';
 export class SeedService {
   private readonly axios: AxiosInstance;
 
-  constructor(private readonly httpService: HttpService) {}
+  constructor(
+    @InjectModel(Pokemon.name)
+    private readonly pokemonModel: Model<Pokemon>,
+    private readonly http: AxiosAdapter,
+  ) {}
+  // async executeSeed() {
+  //   await this.pokemonModel.deleteMany({});
+
+  //   const { data } = await this.httpService.axiosRef.get<PokeResponse>(
+  //     'https://pokeapi.co/api/v2/pokemon?limit=10',
+  //   );
+
+  //   const insertePromisesArray = [];
+
+  //   data.results.forEach(async ({ name, url }) => {
+  //     const segments = url.split('/');
+  //     const no: number = +segments[segments.length - 2];
+
+  //     console.log({ name, no });
+  //     // this.pokemonService.create({ name, no });
+  //     insertePromisesArray.push(this.pokemonModel.create({ name, no }));
+  //   });
+
+  //   console.log(data);
+  //   await Promise.all(insertePromisesArray);
+
+  //   return 'Excecuted seed';
+  // }
+
   async executeSeed() {
-    const { data } = await this.httpService.axiosRef.get<PokeResponse>(
+    await this.pokemonModel.deleteMany({});
+
+    const data = await this.http.get<PokeResponse>(
       'https://pokeapi.co/api/v2/pokemon?limit=650',
     );
-    data.results.forEach(({ name, url }) => {
+
+    const pokemonToInsert: { name: string; no: number }[] = [];
+
+    data.results.forEach(async ({ name, url }) => {
       const segments = url.split('/');
       const no: number = +segments[segments.length - 2];
 
       console.log({ name, no });
+      // this.pokemonService.create({ name, no });
+      pokemonToInsert.push({ name, no });
     });
 
-    console.log(data);
+    await this.pokemonModel.insertMany(pokemonToInsert);
 
-    return data.results;
+    return 'Excecuted seed';
   }
 }

@@ -4,18 +4,24 @@ import {
   InternalServerErrorException,
   NotFoundException,
 } from '@nestjs/common';
+import { InjectModel } from '@nestjs/mongoose';
+import { Model, isValidObjectId } from 'mongoose';
+import { PaginationDto } from 'src/common/dto/pagination.dto';
 import { CreatePokemonDto } from './dto/create-pokemon.dto';
 import { UpdatePokemonDto } from './dto/update-pokemon.dto';
-import { Model, isValidObjectId } from 'mongoose';
 import { Pokemon } from './entities/pokemon.entity';
-import { InjectModel } from '@nestjs/mongoose';
+import { ConfigService } from '@nestjs/config';
 
 @Injectable()
 export class PokemonService {
+  private defaultLimit: number;
   constructor(
     @InjectModel(Pokemon.name)
     private readonly pokemonModel: Model<Pokemon>,
-  ) {}
+    private readonly configService: ConfigService,
+  ) {
+    this.defaultLimit = this.configService.get<number>('defaultLimit');
+  }
   async create(createPokemonDto: CreatePokemonDto) {
     console.log(createPokemonDto);
 
@@ -29,8 +35,35 @@ export class PokemonService {
     }
   }
 
-  findAll() {
-    return `This action returns all pokemon`;
+  async findAll(paginationDto: PaginationDto) {
+    try {
+      const { limit = this.defaultLimit, page = 1 } = paginationDto;
+
+      if (limit === 0 || limit === -1) {
+        const data = await this.pokemonModel.find().exec();
+        const total = data.length;
+        return { data, total, page: 1, limit: total, start: 1, end: total };
+      }
+
+      const skip = (page - 1) * limit;
+      const data = await this.pokemonModel
+        .find()
+        .limit(limit)
+        .skip(skip)
+        .exec();
+      const total = await this.pokemonModel.countDocuments().exec();
+
+      const start = skip + 1;
+      const end = skip + data.length;
+      return { data, total, page, limit, start, end };
+    } catch (error) {
+      console.log(error);
+      throw new Error('Error retrieving data');
+    }
+
+    // const { limit = 10, page = 0 } = paginationDto;
+    // const data = this.pokemonModel.find().limit(limit).skip(page).exec();
+    // return data;
   }
 
   async findOne(term: string) {
